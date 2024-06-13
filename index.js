@@ -1,25 +1,23 @@
 import os from 'os';
-import cfonts from 'cfonts';
-import yargs from 'yargs';
+import cfonts from "cfonts";
+import yargs from "yargs";
 import express from 'express';
 import { spawn } from 'child_process';
 import path from 'path';
 import { join, dirname } from 'path';
 import fs from 'fs';
-import { createInterface } from 'readline';
+import { createInterface } from "readline";
 import { promises as fsPromises } from 'fs';
 import chalk from 'chalk';
 import { fileURLToPath } from 'url';
-import { makeWASocket, useMultiFileAuthState, DisconnectReason } from '@adiwajshing/baileys';
-import ws from 'ws';
 
-const __dirname = dirname(fileURLToPath(import.meta.url));
+const __dirname = dirname(fileURLToPath(import.meta.url))
 
 const app = express();
 const port = process.env.PORT || 8080;
 
 app.get('/', (req, res) => {
-  res.sendFile(__dirname + '/index.html');
+ res.sendFile(__dirname + '/index.html');
 });
 
 app.listen(port, () => {
@@ -28,12 +26,14 @@ app.listen(port, () => {
 
 let isRunning = false;
 
-const { say } = cfonts;
+const {
+    say
+} = cfonts;
 
-const rl = createInterface(process.stdin, process.stdout);
+const rl = createInterface(process.stdin, process.stdout)
 
 async function start(file) {
-  if (isRunning) return;
+    if (isRunning) return;
   isRunning = true;
 
   const currentFilePath = new URL(import.meta.url).pathname;
@@ -41,37 +41,34 @@ async function start(file) {
   const p = spawn(process.argv[0], args, {
     stdio: ['inherit', 'inherit', 'inherit', 'ipc'],
   });
-
-  p.on('message', (data) => {
-    console.log(chalk.magenta('[ ✅ RECEIVED ]', data));
-    switch (data) {
-      case 'reset':
-        p.process.kill();
-        isRunning = false;
-        start.apply(this, arguments);
-        break;
-      case 'uptime':
-        p.send(process.uptime());
-        break;
-    }
-  });
-
-  p.on('exit', (code) => {
-    isRunning = false;
-    console.error('[❗] Exited with code:', code);
-    if (code !== 0) return start(file);
-    watchFile(args[0], () => {
-      unwatchFile(args[0]);
-      start(file);
-    });
-  });
-
-  const opts = yargs(process.argv.slice(2)).exitProcess(false).parse();
-  if (!opts.test) {
-    if (!rl.listenerCount()) rl.on('line', (line) => {
-      p.emit('message', line.trim());
-    });
-  }
+    p.on("message", data => {
+        console.log(chalk.magenta("[ ✅ RECEIVED ]", data))
+        switch (data) {
+            case "reset":
+                p.process.kill()
+                isRunning = false
+                start.apply(this, arguments)
+                break
+            case "uptime":
+                p.send(process.uptime())
+                break
+        }
+    })
+    p.on("exit", (_, code) => {
+        isRunning = false
+        console.error("[❗] Exited with code :", code)
+        if (code !== 0) return start(file)
+        watchFile(args[0], () => {
+            unwatchFile(args[0])
+            start(file)
+        })
+    })
+    let opts = new Object(yargs(process.argv.slice(2)).exitProcess(false).parse())
+    if (!opts["test"])
+        if (!rl.listenerCount()) rl.on("line", line => {
+            p.emit("message", line.trim())
+        })
+    // console.log(p)
 
   const pluginsFolder = path.join(path.dirname(currentFilePath), 'plugins');
 
@@ -145,28 +142,4 @@ function getTotalFoldersAndFiles(folderPath) {
   });
 }
 
-async function connectToWhatsApp() {
-  const { state, saveCreds } = await useMultiFileAuthState('auth_info');
-  const conn = makeWASocket({
-    printQRInTerminal: true,
-    auth: state,
-  });
-
-  conn.ev.on('connection.update', (update) => {
-    const { connection, lastDisconnect } = update;
-    if (connection === 'close') {
-      const shouldReconnect = lastDisconnect.error?.output?.statusCode !== DisconnectReason.loggedOut;
-      console.log(chalk.red('Connection closed due to', lastDisconnect.error, 'reconnecting...', shouldReconnect));
-      if (shouldReconnect) {
-        connectToWhatsApp();
-      }
-    } else if (connection === 'open') {
-      console.log(chalk.green('Connected'));
-    }
-  });
-
-  conn.ev.on('creds.update', saveCreds);
-}
-
-connectToWhatsApp().catch(err => console.error('Failed to connect to WhatsApp:', err));
 start('main.js');
